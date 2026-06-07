@@ -4,3 +4,4 @@ databases[asyncpg]
 pydantic
 python-dotenv
 mangum
+boto3
