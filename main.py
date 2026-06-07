@@ -30,7 +30,7 @@ app.include_router(apply.router)
 
 @app.get("/", tags=["System"])
 async def root_health():
-    return {"status": "Online", "message": "Job Hunter API is Live! 🚀"}
+    return {"status": "Online", "message": "Job Hunter API is Live! 🚀 (CI/CD Automated Deployment!)"}
 
 # AWS Lambda Handler
 from mangum import Mangum
