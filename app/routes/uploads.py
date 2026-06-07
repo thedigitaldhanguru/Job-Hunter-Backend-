@@ -4,9 +4,17 @@ from botocore.exceptions import ClientError
 import os
 import uuid
 
+from botocore.client import Config
+
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
-s3_client = boto3.client('s3', region_name=os.getenv("AWS_REGION", "ap-south-1"))
+region = os.getenv("AWS_REGION", "ap-south-1")
+s3_client = boto3.client(
+    's3', 
+    region_name=region,
+    endpoint_url=f"https://s3.{region}.amazonaws.com",
+    config=Config(s3={'addressing_style': 'virtual'})
+)
 AVATAR_BUCKET_NAME = os.getenv("AWS_S3_AVATAR_BUCKET_NAME")
 RESUME_BUCKET_NAME = os.getenv("AWS_S3_RESUME_BUCKET_NAME")
 
