@@ -11,6 +11,7 @@ class Application(BaseModel):
     job_id: int = 0
     company_name: str
     job_title: str
+    job_url: Optional[str] = None
     application_status: str = 'applied'
 
 # 2. Model for updating status via JSON body
@@ -37,8 +38,8 @@ async def get_user_applications(user_email: str):
 async def create_application(app_data: Application):
     """Add a new job application with company and title."""
     query = """
-        INSERT INTO dbc.applications (user_email, job_id, company_name, job_title, application_status)
-        VALUES (:user_email, :job_id, :company_name, :job_title, :application_status)
+        INSERT INTO dbc.applications (user_email, job_id, company_name, job_title, application_status, job_url)
+        VALUES (:user_email, :job_id, :company_name, :job_title, :application_status, :job_url)
         RETURNING *;
     """
     try:
