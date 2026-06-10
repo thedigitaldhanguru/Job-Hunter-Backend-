@@ -109,31 +109,42 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
             job_location = (row["location"] or "").lower()
             jd_text = (row["jd_full_text"] or "").lower()
             
-            # A) Title Match (40 pts)
-            if user_job_type and user_job_type in job_title:
-                score += 40
+            # A) Title Match (Smart Keyword Matching)
+            title_score = 0
+            if user_job_type:
+                # Split preferred title into words (e.g. "Full stack developer" -> ["full", "stack", "developer"])
+                keywords = [word for word in user_job_type.split() if len(word) > 2]
+                for word in keywords:
+                    if word in job_title:
+                        title_score += 15
+            score += title_score
                 
-            # B) Location Match (20 pts)
-            if "remote" in job_location or (user_location and user_location in job_location):
-                score += 20
+            # B) Location Match (Strict location vs Remote)
+            if user_location and user_location != "remote" and user_location in job_location:
+                score += 30  # High score for exact city match (e.g. Pune)
+            elif "remote" in job_location:
+                score += 5   # Small fallback bonus for remote jobs
                 
             # C) Skill Match (10 pts per matching skill found in JD)
             matched_skills = []
             for skill in user_skills:
                 if not skill: continue
-                # We use Regex \b to ensure we only match whole words (e.g. so 'C' doesn't match 'React')
+                # We use Regex \b to ensure we only match whole words
                 if re.search(r'\b' + re.escape(skill) + r'\b', jd_text):
                     score += 10
                     matched_skills.append(skill)
                     
-            scored_jobs.append({
-                "id": str(row["id"]),
-                "title": row["title"],
-                "company_raw": row["company_raw"],
-                "location": row["location"],
-                "score": score,
-                "matched_skills": matched_skills
-            })
+            # D) Filter out completely irrelevant jobs
+            # Only include jobs that have at least one matching skill OR a matching title keyword
+            if len(matched_skills) > 0 or title_score > 0:
+                scored_jobs.append({
+                    "id": str(row["id"]),
+                    "title": row["title"],
+                    "company_raw": row["company_raw"],
+                    "location": row["location"],
+                    "score": score,
+                    "matched_skills": matched_skills
+                })
             
         # 4. Sort highest score first, and return top 50
         scored_jobs.sort(key=lambda x: x["score"], reverse=True)
