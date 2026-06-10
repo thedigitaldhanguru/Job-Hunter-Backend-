@@ -74,7 +74,7 @@ async def search_jobs(q: str = Query(..., description="Search by job title or co
 async def get_recommended_jobs(user_id: str = Path(..., description="The ID of the user to score jobs for")):
     try:
         # 1. Fetch user profile
-        user_query = "SELECT extended_profile FROM dbc.users WHERE id = :user_id"
+        user_query = "SELECT extended_profile, current_ctc, expected_ctc FROM dbc.users WHERE id = :user_id"
         user_row = await database.fetch_one(query=user_query, values={"user_id": user_id})
         
         if not user_row or not user_row["extended_profile"]:
@@ -85,17 +85,21 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
         user_prefs = profile_data.get("preferences", {})
         user_job_type = user_prefs.get("jobType", "").lower().strip()
         user_location = user_prefs.get("location", "").lower().strip()
+        expected_ctc = user_row["expected_ctc"] or 0
         
-        # 2. Fetch jobs (fetching jd_full_text)
+        # 2. Fetch jobs (fetching jd_full_text and salary)
         jobs_query = """
             SELECT 
                 j.id, 
                 COALESCE(j.title, 'Untitled Position') AS title, 
                 COALESCE(c.name, 'Unknown Company') AS company_raw,
                 j.location,
-                j.jd_full_text
+                j.jd_full_text,
+                j.salary_min,
+                j.salary_max
             FROM dbc.jobs j
             LEFT JOIN dbc.companies c ON j.company_id = c.id
+            WHERE j.is_active = true
             ORDER BY j.id DESC
             LIMIT 1000
         """
@@ -108,6 +112,7 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
             job_title = row["title"].lower()
             job_location = (row["location"] or "").lower()
             jd_text = (row["jd_full_text"] or "").lower()
+            job_salary_max = row["salary_max"] or 0
             
             # A) Title Match (Smart Keyword Matching)
             title_score = 0
@@ -134,7 +139,14 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
                     score += 10
                     matched_skills.append(skill)
                     
-            # D) Filter out completely irrelevant jobs
+            # D) Salary Match (Expected CTC vs Job Max Salary)
+            if expected_ctc > 0 and job_salary_max > 0:
+                if job_salary_max >= expected_ctc:
+                    score += 30  # Great match!
+                else:
+                    score -= 50  # Massive penalty for paying below expectations
+                    
+            # E) Filter out completely irrelevant jobs
             # Only include jobs that have at least one matching skill OR a matching title keyword
             if len(matched_skills) > 0 or title_score > 0:
                 scored_jobs.append({
@@ -142,6 +154,7 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
                     "title": row["title"],
                     "company_raw": row["company_raw"],
                     "location": row["location"],
+                    "salary_max": job_salary_max,
                     "score": score,
                     "matched_skills": matched_skills
                 })
