@@ -74,7 +74,7 @@ async def search_jobs(q: str = Query(..., description="Search by job title or co
 async def get_recommended_jobs(user_id: str = Path(..., description="The ID of the user to score jobs for")):
     try:
         # 1. Fetch user profile
-        user_query = "SELECT extended_profile, current_ctc, expected_ctc FROM dbc.users WHERE id = :user_id"
+        user_query = "SELECT extended_profile, current_ctc, expected_ctc, years_of_experience FROM dbc.users WHERE id = :user_id"
         user_row = await database.fetch_one(query=user_query, values={"user_id": user_id})
         
         if not user_row or not user_row["extended_profile"]:
@@ -86,6 +86,7 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
         user_job_type = user_prefs.get("jobType", "").lower().strip()
         user_location = user_prefs.get("location", "").lower().strip()
         expected_ctc = user_row["expected_ctc"] or 0
+        user_yoe = user_row["years_of_experience"] or 0
         
         # 2. Fetch jobs (fetching jd_full_text and salary)
         jobs_query = """
@@ -146,7 +147,25 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
                 else:
                     score -= 50  # Massive penalty for paying below expectations
                     
-            # E) Filter out completely irrelevant jobs
+            # E) Experience Match (Dynamic Extraction from JD)
+            # Find phrases like "5+ years", "3-5 years", "2 yrs" in the description
+            job_req_exp = 0
+            exp_matches = re.findall(r'\b([0-9]{1,2})(?:\+|(?:\s*(?:-|to)\s*[0-9]{1,2}))?\s*(?:years?|yrs?)\b', jd_text)
+            if exp_matches:
+                # Take the max years mentioned (cap at 20 to ignore false positives like "50 years of company history")
+                valid_years = [int(y) for y in exp_matches if 0 < int(y) <= 20]
+                if valid_years:
+                    job_req_exp = max(valid_years)
+                    
+            if user_yoe > 0 and job_req_exp > 0:
+                if job_req_exp > user_yoe:
+                    # Penalize heavily for each year they are short (e.g., Job wants 5, user has 2 -> 3 years short -> -60 pts)
+                    score -= (job_req_exp - user_yoe) * 20
+                else:
+                    # User meets or exceeds the required experience
+                    score += 20
+                    
+            # F) Filter out completely irrelevant jobs
             # Only include jobs that have at least one matching skill OR a matching title keyword
             if len(matched_skills) > 0 or title_score > 0:
                 scored_jobs.append({
@@ -155,6 +174,7 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
                     "company_raw": row["company_raw"],
                     "location": row["location"],
                     "salary_max": job_salary_max,
+                    "required_experience": job_req_exp,
                     "score": score,
                     "matched_skills": matched_skills
                 })
