@@ -164,8 +164,8 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
             score = min(100, score)
                     
             # F) Filter out completely irrelevant jobs
-            # Only include jobs that score at least 30 points
-            if score >= 30:
+            # Only include jobs that score at least 30 points AND have some relevancy
+            if score >= 30 and (len(matched_skills) > 0 or title_score > 0):
                 scored_jobs.append({
                     "id": str(row["id"]),
                     "title": row["title"],
