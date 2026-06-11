@@ -122,30 +122,28 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
                 keywords = [word for word in user_job_type.split() if len(word) > 2]
                 for word in keywords:
                     if word in job_title:
-                        title_score += 15
+                        title_score += 20
             score += title_score
                 
             # B) Location Match (Strict location vs Remote)
             if user_location and user_location != "remote" and user_location in job_location:
                 score += 30  # High score for exact city match (e.g. Pune)
             elif "remote" in job_location:
-                score += 5   # Small fallback bonus for remote jobs
+                score += 10  # Fallback bonus for remote jobs
                 
-            # C) Skill Match (10 pts per matching skill found in JD)
+            # C) Skill Match (20 pts per matching skill found in JD)
             matched_skills = []
             for skill in user_skills:
                 if not skill: continue
                 # We use Regex \b to ensure we only match whole words
                 if re.search(r'\b' + re.escape(skill) + r'\b', jd_text):
-                    score += 10
+                    score += 20
                     matched_skills.append(skill)
                     
             # D) Salary Match (Expected CTC vs Job Max Salary)
             if expected_ctc > 0 and job_salary_max > 0:
                 if job_salary_max >= expected_ctc:
-                    score += 30  # Great match!
-                else:
-                    score -= 50  # Massive penalty for paying below expectations
+                    score += 40  # Great match!
                     
             # E) Experience Match (Dynamic Extraction from JD)
             # Find phrases like "5+ years", "3-5 years", "2 yrs" in the description
@@ -158,16 +156,16 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
                     job_req_exp = max(valid_years)
                     
             if user_yoe > 0 and job_req_exp > 0:
-                if job_req_exp > user_yoe:
-                    # Penalize heavily for each year they are short (e.g., Job wants 5, user has 2 -> 3 years short -> -60 pts)
-                    score -= (job_req_exp - user_yoe) * 20
-                else:
+                if job_req_exp <= user_yoe:
                     # User meets or exceeds the required experience
-                    score += 20
+                    score += 30
+                    
+            # Cap the score at 100 for a perfect match
+            score = min(100, score)
                     
             # F) Filter out completely irrelevant jobs
-            # Only include jobs that have at least one matching skill OR a matching title keyword
-            if len(matched_skills) > 0 or title_score > 0:
+            # Only include jobs that score at least 30 points
+            if score >= 30:
                 scored_jobs.append({
                     "id": str(row["id"]),
                     "title": row["title"],
