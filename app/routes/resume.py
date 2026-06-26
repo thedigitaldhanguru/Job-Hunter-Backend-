@@ -449,6 +449,7 @@ def extract_projects(sections: Dict[str, str]) -> List[Dict]:
 
 
 @router.post("/extract")
+async def extract_resume(req):
     # Debug: log incoming payload
     print(f"[DEBUG] extract_resume payload: {req}")
     resume_url = req.resume_url

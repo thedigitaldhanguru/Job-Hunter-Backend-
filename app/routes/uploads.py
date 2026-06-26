@@ -15,8 +15,8 @@ s3_client = boto3.client(
     endpoint_url=f"https://s3.{region}.amazonaws.com",
     config=Config(s3={'addressing_style': 'virtual'})
 )
-AVATAR_BUCKET_NAME = os.getenv("AWS_S3_AVATAR_BUCKET_NAME")
-RESUME_BUCKET_NAME = os.getenv("AWS_S3_RESUME_BUCKET_NAME")
+AVATAR_BUCKET_NAME = os.getenv("AWS_S3_AVATAR_BUCKET_NAME", "job-hunter-user-avatars")
+RESUME_BUCKET_NAME = os.getenv("AWS_S3_RESUME_BUCKET_NAME", "job-hunter-resumes")
 
 @router.get("/presigned-url")
 async def get_presigned_url(file_name: str = Query(...), file_type: str = Query(...)):
@@ -24,10 +24,9 @@ async def get_presigned_url(file_name: str = Query(...), file_type: str = Query(
     Generates a secure presigned URL that the frontend can use to upload a file directly to S3.
     """
     if file_type.startswith("image/"):
-        target_bucket = AVATAR_BUCKET_NAME
+        target_bucket = AVATAR_BUCKET_NAME or "job-hunter-user-avatars"
     else:
-        target_bucket = RESUME_BUCKET_NAME
-        
+        target_bucket = RESUME_BUCKET_NAME or "job-hunter-resumes"
     # Debug: log bucket environment variables
     print(f"[DEBUG] AVATAR_BUCKET_NAME={AVATAR_BUCKET_NAME}, RESUME_BUCKET_NAME={RESUME_BUCKET_NAME}, REGION={region}")
     if not target_bucket:
