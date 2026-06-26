@@ -453,8 +453,12 @@ async def extract_resume(req: ExtractRequest):
     import httpx
 
     resume_url = req.resume_url
-    if not resume_url or not resume_url.startswith("http"):
-        raise HTTPException(status_code=400, detail="Invalid resume URL.")
+    # Validate / normalize the incoming URL
+    if not resume_url:
+        raise HTTPException(status_code=400, detail="Missing resume URL.")
+    if not resume_url.lower().startswith(("http://", "https://")):
+        # Assume HTTPS when scheme is omitted
+        resume_url = f"https://{resume_url}"
 
     # 1. Download file from S3
     try:
