@@ -21,7 +21,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "https://jobhunter.in", 
-        "https://www.jobhunter.in"
+        "https://www.jobhunter.in",
+        "https://job-hunter-frontend-phi.vercel.app"
         # IMPORTANT: Replace the below with your actual pinned Extension ID
         # "chrome-extension://<your-extension-id>"
     ],
