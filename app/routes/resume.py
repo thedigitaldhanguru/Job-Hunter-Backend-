@@ -449,9 +449,8 @@ def extract_projects(sections: Dict[str, str]) -> List[Dict]:
 
 
 @router.post("/extract")
-async def extract_resume(req: ExtractRequest):
-    import httpx
-
+    # Debug: log incoming payload
+    print(f"[DEBUG] extract_resume payload: {req}")
     resume_url = req.resume_url
     # Validate / normalize the incoming URL
     if not resume_url:
@@ -459,7 +458,6 @@ async def extract_resume(req: ExtractRequest):
     if not resume_url.lower().startswith(("http://", "https://")):
         # Assume HTTPS when scheme is omitted
         resume_url = f"https://{resume_url}"
-
     # 1. Download file from S3
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
