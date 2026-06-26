@@ -28,8 +28,13 @@ async def get_presigned_url(file_name: str = Query(...), file_type: str = Query(
     else:
         target_bucket = RESUME_BUCKET_NAME
         
+    # Debug: log bucket environment variables
+    print(f"[DEBUG] AVATAR_BUCKET_NAME={AVATAR_BUCKET_NAME}, RESUME_BUCKET_NAME={RESUME_BUCKET_NAME}, REGION={region}")
     if not target_bucket:
-        raise HTTPException(status_code=500, detail="AWS S3 Bucket environment variables are not properly configured.")
+        msg = "AWS S3 Bucket environment variables are not properly configured."
+        print(f"[ERROR] {msg}")
+        raise HTTPException(status_code=500, detail=msg)
+
 
     # Create a unique file name to prevent overwriting
     unique_filename = f"{uuid.uuid4()}-{file_name}"
