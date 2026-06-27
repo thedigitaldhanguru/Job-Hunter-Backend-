@@ -15,6 +15,11 @@ async def get_latest_jobs(limit: int = 20, offset: int = 0):
                 COALESCE(c.name, 'Unknown Company') AS company_raw 
             FROM dbc.jobs j
             LEFT JOIN dbc.companies c ON j.company_id = c.id
+            WHERE j.title IS NOT NULL 
+              AND j.title != '' 
+              AND j.title != 'Untitled Position'
+              AND j.job_url IS NOT NULL 
+              AND j.job_url != ''
             ORDER BY j.id DESC 
             LIMIT :limit OFFSET :offset
         """
@@ -43,8 +48,13 @@ async def search_jobs(q: str = Query(..., description="Search by job title or co
                 COALESCE(c.name, 'Unknown Company') AS company_raw 
             FROM dbc.jobs j
             LEFT JOIN dbc.companies c ON j.company_id = c.id
-            WHERE j.title ILIKE :title_query 
-               OR c.name ILIKE :company_query
+            WHERE (j.title ILIKE :title_query 
+               OR c.name ILIKE :company_query)
+              AND j.title IS NOT NULL 
+              AND j.title != '' 
+              AND j.title != 'Untitled Position'
+              AND j.job_url IS NOT NULL 
+              AND j.job_url != ''
             ORDER BY j.id DESC
             LIMIT 50
         """
@@ -101,6 +111,11 @@ async def get_recommended_jobs(user_id: str = Path(..., description="The ID of t
             FROM dbc.jobs j
             LEFT JOIN dbc.companies c ON j.company_id = c.id
             WHERE j.is_active = true
+              AND j.title IS NOT NULL 
+              AND j.title != '' 
+              AND j.title != 'Untitled Position'
+              AND j.job_url IS NOT NULL 
+              AND j.job_url != ''
             ORDER BY j.id DESC
             LIMIT 1000
         """
