@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import re
 import io
+import httpx
 from app.bedrock_service import bedrock_extractor
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
@@ -449,7 +450,7 @@ def extract_projects(sections: Dict[str, str]) -> List[Dict]:
 
 
 @router.post("/extract")
-async def extract_resume(req):
+async def extract_resume(req: ExtractRequest):
     # Debug: log incoming payload
     print(f"[DEBUG] extract_resume payload: {req}")
     resume_url = req.resume_url
