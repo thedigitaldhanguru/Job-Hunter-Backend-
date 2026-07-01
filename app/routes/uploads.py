@@ -40,9 +40,10 @@ async def get_presigned_url(
         raise HTTPException(status_code=500, detail=msg)
 
 
-    # Create a unique file name to prevent overwriting
+    # Create a unique file name that always overwrites previous resume
     email = current_user["email"]
-    unique_filename = f"{email}/{file_name}"
+    _, ext = os.path.splitext(file_name)
+    unique_filename = f"{email}/resume{ext.lower()}"
     
     try:
         # Generate the presigned URL for PUT requests
