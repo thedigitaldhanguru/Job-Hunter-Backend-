@@ -42,7 +42,7 @@ async def get_presigned_url(
 
     # Create a unique file name to prevent overwriting
     email = current_user["email"]
-    unique_filename = f"{email}/{uuid.uuid4()}-{file_name}"
+    unique_filename = f"{email}/{file_name}"
     
     try:
         # Generate the presigned URL for PUT requests

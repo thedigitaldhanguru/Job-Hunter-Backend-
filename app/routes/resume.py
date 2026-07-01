@@ -4,6 +4,9 @@ from typing import Optional, List, Dict, Any
 import re
 import io
 import httpx
+import boto3
+import os
+from urllib.parse import urlparse
 from app.bedrock_service import bedrock_extractor
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
@@ -460,13 +463,27 @@ async def extract_resume(req: ExtractRequest):
     if not resume_url.lower().startswith(("http://", "https://")):
         # Assume HTTPS when scheme is omitted
         resume_url = f"https://{resume_url}"
-    # 1. Download file from S3
+    # 1. Download file from S3 securely using boto3, falling back to HTTP if not a standard S3 link
+    content = b""
+    content_type = ""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(resume_url)
-            response.raise_for_status()
-            content = response.content
-            content_type = response.headers.get("content-type", "")
+        if "s3.amazonaws.com" in resume_url or ".s3." in resume_url:
+            parsed_url = urlparse(resume_url)
+            netloc_parts = parsed_url.netloc.split('.')
+            bucket_name = netloc_parts[0]
+            file_key = parsed_url.path.lstrip('/')
+            
+            region = os.getenv("AWS_REGION", "ap-south-1")
+            s3_client = boto3.client('s3', region_name=region)
+            s3_response = s3_client.get_object(Bucket=bucket_name, Key=file_key)
+            content = s3_response['Body'].read()
+            content_type = s3_response.get('ContentType', '')
+        else:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(resume_url)
+                response.raise_for_status()
+                content = response.content
+                content_type = response.headers.get("content-type", "")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to download resume: {str(e)}")
 
