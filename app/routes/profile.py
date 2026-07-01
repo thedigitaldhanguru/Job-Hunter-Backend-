@@ -1,25 +1,27 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from app.database import database
 import json
-from datetime import datetime # <-- 1. ADD THIS IMPORT
+from datetime import datetime
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
 class ProfileUpdate(BaseModel):
-    full_name: str
+    full_name: Optional[str] = ""
     email: str
-    degree: str
-    university: str
-    location: str
-    experience: str
-    phone: str
-    gender: str
-    dob: str
-    profile_summary: str
-    avatar_url: str
-    extended_profile: Dict[str, Any] 
+    degree: Optional[str] = ""
+    university: Optional[str] = ""
+    location: Optional[str] = ""
+    experience: Optional[str] = ""
+    phone: Optional[str] = ""
+    gender: Optional[str] = ""
+    dob: Optional[str] = ""
+    profile_summary: Optional[str] = ""
+    avatar_url: Optional[str] = ""
+    extended_profile: Optional[Dict[str, Any]] = None
+    current_ctc: Optional[str] = ""
+    expected_ctc: Optional[str] = ""
 
 @router.get("/{email}")
 async def get_profile(email: str):
@@ -29,14 +31,11 @@ async def get_profile(email: str):
     if not row:
         raise HTTPException(status_code=404, detail="Profile not found")
         
-    # Convert the database row into a standard Python dictionary
     profile_data = dict(row)
     
-    # THE FIX: If extended_profile is a string, parse it back into a dictionary!
     if profile_data.get("extended_profile") and isinstance(profile_data["extended_profile"], str):
         profile_data["extended_profile"] = json.loads(profile_data["extended_profile"])
         
-    # If the database returns None for extended_profile, ensure it's an empty dict
     if not profile_data.get("extended_profile"):
         profile_data["extended_profile"] = {}
         
@@ -47,10 +46,12 @@ async def update_profile(profile: ProfileUpdate):
     query = """
         INSERT INTO dbc.users (
             full_name, email, degree, university, location, experience, 
-            phone, gender, dob, profile_summary, avatar_url, extended_profile
+            phone, gender, dob, profile_summary, avatar_url, extended_profile,
+            current_ctc, expected_ctc
         ) VALUES (
             :full_name, :email, :degree, :university, :location, :experience, 
-            :phone, :gender, :dob, :profile_summary, :avatar_url, CAST(:extended_profile AS JSONB)
+            :phone, :gender, :dob, :profile_summary, :avatar_url, CAST(:extended_profile AS JSONB),
+            :current_ctc, :expected_ctc
         )
         ON CONFLICT (email) DO UPDATE SET
             full_name = EXCLUDED.full_name,
@@ -64,31 +65,51 @@ async def update_profile(profile: ProfileUpdate):
             profile_summary = EXCLUDED.profile_summary,
             avatar_url = EXCLUDED.avatar_url,
             extended_profile = EXCLUDED.extended_profile,
+            current_ctc = EXCLUDED.current_ctc,
+            expected_ctc = EXCLUDED.expected_ctc,
             updated_at = NOW()
         RETURNING *;
     """
     try:
         data = profile.dict()
         
-        # 2. JSON Serialization
-        data["extended_profile"] = json.dumps(data.get("extended_profile", {}))
+        # 1. JSON Serialization of extended_profile
+        data["extended_profile"] = json.dumps(data.get("extended_profile") or {})
         
-        # 3. CRUCIAL FIX: Date Parsing Logic
-        dob_str = data.get("dob", "").strip()
+        # 2. Sanitize optional string fields (default to "" if None to satisfy NOT NULL constraints)
+        string_fields = [
+            "full_name", "degree", "university", "location", "experience", 
+            "phone", "gender", "profile_summary", "avatar_url"
+        ]
+        for field in string_fields:
+            if data.get(field) is None:
+                data[field] = ""
+
+        # 3. Convert CTC fields to float or None for DB insertion
+        for ctc_field in ["current_ctc", "expected_ctc"]:
+            ctc_val = data.get(ctc_field)
+            if ctc_val is not None:
+                clean_val = "".join(c for c in str(ctc_val) if c.isdigit() or c == '.')
+                try:
+                    data[ctc_field] = float(clean_val) if clean_val else None
+                except ValueError:
+                    data[ctc_field] = None
+            else:
+                data[ctc_field] = None
+        
+        # 4. Date Parsing Logic safely
+        dob_val = data.get("dob")
+        dob_str = dob_val.strip() if isinstance(dob_val, str) else ""
         
         if not dob_str:
-            # If the user leaves it empty, send None (NULL) to Postgres
             data["dob"] = None
         else:
             try:
-                # Try to parse standard HTML5 Date (YYYY-MM-DD)
                 data["dob"] = datetime.strptime(dob_str, "%Y-%m-%d").date()
             except ValueError:
                 try:
-                    # Fallback: Try to parse what you typed (DD-MM-YYYY)
                     data["dob"] = datetime.strptime(dob_str, "%d-%m-%Y").date()
                 except ValueError:
-                    # If it's a completely unreadable format, null it out so it doesn't crash the server
                     data["dob"] = None
                     
         # Execute query
