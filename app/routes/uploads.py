@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 import boto3
 from botocore.exceptions import ClientError
 import os
 import uuid
 
 from botocore.client import Config
+from app.dependencies.auth import get_current_user
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
 
@@ -19,7 +20,11 @@ AVATAR_BUCKET_NAME = os.getenv("AWS_S3_AVATAR_BUCKET_NAME", "job-hunter-user-ava
 RESUME_BUCKET_NAME = os.getenv("AWS_S3_RESUME_BUCKET_NAME", "job-hunter-resumes")
 
 @router.get("/presigned-url")
-async def get_presigned_url(file_name: str = Query(...), file_type: str = Query(...)):
+async def get_presigned_url(
+    file_name: str = Query(...),
+    file_type: str = Query(...),
+    current_user: dict = Depends(get_current_user)
+):
     """
     Generates a secure presigned URL that the frontend can use to upload a file directly to S3.
     """
@@ -36,7 +41,8 @@ async def get_presigned_url(file_name: str = Query(...), file_type: str = Query(
 
 
     # Create a unique file name to prevent overwriting
-    unique_filename = f"{uuid.uuid4()}-{file_name}"
+    email = current_user["email"]
+    unique_filename = f"{email}/{uuid.uuid4()}-{file_name}"
     
     try:
         # Generate the presigned URL for PUT requests
@@ -52,7 +58,6 @@ async def get_presigned_url(file_name: str = Query(...), file_type: str = Query(
             ExpiresIn=300 # URL expires in 5 minutes
         )
         
-        region = os.getenv("AWS_REGION", "ap-south-1")
         file_url = f"https://{target_bucket}.s3.{region}.amazonaws.com/{unique_filename}"
         
         return {
