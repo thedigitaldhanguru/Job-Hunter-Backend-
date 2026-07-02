@@ -5,6 +5,53 @@ from app.database import database
 
 router = APIRouter(tags=["Listings"])
 
+COMMON_SKILLS = [
+    "Python", "JavaScript", "TypeScript", "Java", "C++", "C#", "Go", "Rust", 
+    "React", "Angular", "Vue", "Next.js", "Node.js", "Express", "Django", "Flask", 
+    "FastAPI", "SQL", "PostgreSQL", "MongoDB", "Redis", "Docker", "Kubernetes", "AWS", 
+    "GCP", "Azure", "DevOps", "CI/CD", "Machine Learning", "Deep Learning", "NLP", 
+    "Data Science", "iOS", "Android", "Swift", "Kotlin", "Flutter", "React Native",
+    "Figma", "UI/UX", "Product Design", "Design Systems", "Product Management"
+]
+
+def extract_skills_from_jd(jd_text: str) -> list:
+    if not jd_text:
+        return ["React", "TypeScript", "Tailwind"]
+    jd_lower = jd_text.lower()
+    matched = []
+    for skill in COMMON_SKILLS:
+        if re.search(r'\b' + re.escape(skill.lower()) + r'\b', jd_lower):
+            matched.append(skill)
+            if len(matched) >= 3:
+                break
+    if not matched:
+        return ["React", "TypeScript", "Tailwind"]
+    return matched
+
+def extract_experience_from_jd(jd_text: str) -> str:
+    if not jd_text:
+        return "1-3 years"
+    match = re.search(r'\b([0-9]+)\s*(?:-|to)?\s*([0-9]*)\+?\s*(?:years?|yrs?)\b', jd_text, re.IGNORECASE)
+    if match:
+        groups = match.groups()
+        if groups[1]:
+            return f"{groups[0]}-{groups[1]} years"
+        return f"{groups[0]}+ years"
+    return "1-3 years"
+
+def format_salary(salary_min: float, salary_max: float) -> str:
+    # Handle optional values safely
+    sal_min = salary_min or 0
+    sal_max = salary_max or 0
+    
+    if sal_max > 0 and sal_min > 0:
+        return f"₹{int(sal_min)}L - ₹{int(sal_max)}L PA"
+    elif sal_max > 0:
+        return f"Up to ₹{int(sal_max)}L PA"
+    elif sal_min > 0:
+        return f"₹{int(sal_min)}L+ PA"
+    return "₹12L - ₹18L PA"
+
 @router.get("/jobs")
 async def get_latest_jobs(limit: int = 20, offset: int = 0):
     try:
@@ -12,7 +59,12 @@ async def get_latest_jobs(limit: int = 20, offset: int = 0):
             SELECT 
                 j.id, 
                 COALESCE(j.title, 'Untitled Position') AS title, 
-                COALESCE(c.name, 'Unknown Company') AS company_raw 
+                COALESCE(c.name, 'Unknown Company') AS company_raw,
+                j.location,
+                j.job_url,
+                j.jd_full_text,
+                j.salary_min,
+                j.salary_max
             FROM dbc.jobs j
             LEFT JOIN dbc.companies c ON j.company_id = c.id
             WHERE j.title IS NOT NULL 
@@ -25,14 +77,26 @@ async def get_latest_jobs(limit: int = 20, offset: int = 0):
         """
         rows = await database.fetch_all(query=query, values={"limit": limit, "offset": offset})
         
-        return [
-            {
+        res = []
+        for row in rows:
+            jd_text = row["jd_full_text"] or ""
+            skills = extract_skills_from_jd(jd_text)
+            exp_req = extract_experience_from_jd(jd_text)
+            salary_rng = format_salary(row["salary_min"], row["salary_max"])
+            
+            res.append({
                 "id": str(row["id"]), 
                 "title": row["title"], 
-                "company_raw": row["company_raw"]
-            } 
-            for row in rows
-        ]
+                "company_raw": row["company_raw"],
+                "location": row["location"] or "Remote",
+                "job_url": row["job_url"] or "",
+                "description": jd_text,
+                "skills": skills,
+                "experience_req": exp_req,
+                "salary_range": salary_rng,
+                "posted_time": "2d ago"
+            })
+        return res
     except Exception as e:
         print(f"❌ DATABASE CRASH IN /jobs: {str(e)}")
         raise HTTPException(status_code=500, detail="Database fetch failed.")
@@ -45,7 +109,12 @@ async def search_jobs(q: str = Query(..., description="Search by job title or co
             SELECT 
                 j.id, 
                 COALESCE(j.title, 'Untitled Position') AS title, 
-                COALESCE(c.name, 'Unknown Company') AS company_raw 
+                COALESCE(c.name, 'Unknown Company') AS company_raw,
+                j.location,
+                j.job_url,
+                j.jd_full_text,
+                j.salary_min,
+                j.salary_max
             FROM dbc.jobs j
             LEFT JOIN dbc.companies c ON j.company_id = c.id
             WHERE (j.title ILIKE :title_query 
@@ -68,14 +137,26 @@ async def search_jobs(q: str = Query(..., description="Search by job title or co
         if not rows:
             raise HTTPException(status_code=404, detail=f"No jobs found matching '{q}'.")
             
-        return [
-            {
+        res = []
+        for row in rows:
+            jd_text = row["jd_full_text"] or ""
+            skills = extract_skills_from_jd(jd_text)
+            exp_req = extract_experience_from_jd(jd_text)
+            salary_rng = format_salary(row["salary_min"], row["salary_max"])
+            
+            res.append({
                 "id": str(row["id"]), 
                 "title": row["title"], 
-                "company_raw": row["company_raw"]
-            } 
-            for row in rows
-        ]
+                "company_raw": row["company_raw"],
+                "location": row["location"] or "Remote",
+                "job_url": row["job_url"] or "",
+                "description": jd_text,
+                "skills": skills,
+                "experience_req": exp_req,
+                "salary_range": salary_rng,
+                "posted_time": "2d ago"
+            })
+        return res
     except Exception as e:
         print(f"❌ DATABASE CRASH IN /jobs/search: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Database search failed: {str(e)}")
