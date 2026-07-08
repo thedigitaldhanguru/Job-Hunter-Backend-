@@ -53,30 +53,84 @@ def format_salary(salary_min: float, salary_max: float) -> str:
     return "₹12L - ₹18L PA"
 
 @router.get("/jobs")
-async def get_latest_jobs(limit: int = 20, offset: int = 0):
+async def get_latest_jobs(limit: int = 20, offset: int = 0, category: str = Query(None)):
     try:
-        query = """
-            SELECT 
-                j.id, 
-                COALESCE(j.title, 'Untitled Position') AS title, 
-                COALESCE(c.name, 'Unknown Company') AS company_raw,
-                j.location,
-                j.job_url,
-                j.jd_full_text,
-                j.salary_min,
-                j.salary_max
-            FROM dbc.jobs j
-            LEFT JOIN dbc.companies c ON j.company_id = c.id
-            WHERE j.title IS NOT NULL 
-              AND j.title != '' 
-              AND j.title != 'Untitled Position'
-              AND j.job_url IS NOT NULL 
-              AND j.job_url != ''
-            ORDER BY j.id DESC 
-            LIMIT :limit OFFSET :offset
-        """
-        rows = await database.fetch_all(query=query, values={"limit": limit, "offset": offset})
-        
+        if category:
+            query = r"""
+                WITH categorized_jobs AS (
+                    SELECT 
+                        j.id, 
+                        COALESCE(j.title, 'Untitled Position') AS title, 
+                        COALESCE(c.name, 'Unknown Company') AS company_raw,
+                        j.location,
+                        j.job_url,
+                        j.jd_full_text,
+                        j.salary_min,
+                        j.salary_max,
+                        CASE 
+                            -- 1. Full Stack
+                            WHEN j.title ~* '\y(full.?stack|mern|mean)\y' 
+                            THEN 'Full Stack'
+
+                            -- 2. Frontend
+                            WHEN j.title ~* '\y(frontend|front-end|react|next\.?js|angular|vue|javascript|typescript|ui engineer)\y' 
+                            THEN 'Frontend'
+
+                            -- 3. Backend
+                            WHEN j.title ~* '\y(backend|back-end|node|express|nestjs|spring|java developer|django|flask|golang)\y' 
+                            THEN 'Backend'
+
+                            -- 4. AI / Data
+                            WHEN j.title ~* '\y(ai|ml|llm|genai|deep learning|computer vision|nlp)\y|data scientist|data engineer|data analyst|analytics engineer|business analyst' 
+                            THEN 'AI / Data'
+
+                            -- 5. DevOps / Cloud
+                            WHEN j.title ~* '\y(devops|cloud|aws|azure|gcp|docker|kubernetes|terraform|sre)\y|platform engineer|site reliability' 
+                            THEN 'DevOps / Cloud'
+
+                            -- 6. Software Engineering
+                            WHEN j.title ~* '\y(software engineer|software developer|developer|programmer|principal engineer|staff engineer|lead engineer|engineering manager)\y' 
+                            THEN 'Software Engineering'
+
+                            ELSE 'Other'
+                        END AS job_category
+                    FROM dbc.jobs j
+                    LEFT JOIN dbc.companies c ON j.company_id = c.id
+                    WHERE j.title IS NOT NULL 
+                      AND j.title != '' 
+                      AND j.title != 'Untitled Position'
+                      AND j.job_url IS NOT NULL 
+                      AND j.job_url != ''
+                )
+                SELECT * FROM categorized_jobs
+                WHERE job_category = :category
+                ORDER BY id DESC
+                LIMIT :limit OFFSET :offset
+            """
+            rows = await database.fetch_all(query=query, values={"limit": limit, "offset": offset, "category": category})
+        else:
+            query = """
+                SELECT 
+                    j.id, 
+                    COALESCE(j.title, 'Untitled Position') AS title, 
+                    COALESCE(c.name, 'Unknown Company') AS company_raw,
+                    j.location,
+                    j.job_url,
+                    j.jd_full_text,
+                    j.salary_min,
+                    j.salary_max
+                FROM dbc.jobs j
+                LEFT JOIN dbc.companies c ON j.company_id = c.id
+                WHERE j.title IS NOT NULL 
+                  AND j.title != '' 
+                  AND j.title != 'Untitled Position'
+                  AND j.job_url IS NOT NULL 
+                  AND j.job_url != ''
+                ORDER BY j.id DESC 
+                LIMIT :limit OFFSET :offset
+            """
+            rows = await database.fetch_all(query=query, values={"limit": limit, "offset": offset})
+            
         res = []
         for row in rows:
             jd_text = row["jd_full_text"] or ""
