@@ -452,17 +452,12 @@ def extract_projects(sections: Dict[str, str]) -> List[Dict]:
     return entries[:8]
 
 
-@router.post("/extract")
-async def extract_resume(req: ExtractRequest):
-    # Debug: log incoming payload
-    print(f"[DEBUG] extract_resume payload: {req}")
-    resume_url = req.resume_url
+async def extract_text_from_url(resume_url: str) -> str:
     # Validate / normalize the incoming URL
-    if not resume_url:
-        raise HTTPException(status_code=400, detail="Missing resume URL.")
     if not resume_url.lower().startswith(("http://", "https://")):
         # Assume HTTPS when scheme is omitted
         resume_url = f"https://{resume_url}"
+        
     # 1. Download file from S3 securely using boto3, falling back to HTTP if not a standard S3 link
     content = b""
     content_type = ""
@@ -489,7 +484,6 @@ async def extract_resume(req: ExtractRequest):
 
     # 2. Detect file type
     url_lower = resume_url.lower().split("?")[0]
-    is_pdf = url_lower.endswith(".pdf") or "pdf" in content_type
     is_docx = url_lower.endswith(".docx") or "word" in content_type or "openxml" in content_type
 
     # 3. Extract raw text
@@ -509,6 +503,19 @@ async def extract_resume(req: ExtractRequest):
 
     if not text or len(text.strip()) < 50:
         raise HTTPException(status_code=422, detail="Resume appears to be empty or unreadable.")
+        
+    return text
+
+
+@router.post("/extract")
+async def extract_resume(req: ExtractRequest):
+    # Debug: log incoming payload
+    print(f"[DEBUG] extract_resume payload: {req}")
+    resume_url = req.resume_url
+    if not resume_url:
+        raise HTTPException(status_code=400, detail="Missing resume URL.")
+        
+    text = await extract_text_from_url(resume_url)
 
     # 4. Try Bedrock extraction first
     result = None
@@ -559,3 +566,117 @@ async def extract_resume(req: ExtractRequest):
         "raw_text_length": len(text),
         "extraction_method": extraction_method,
     }
+
+
+class TailorRequest(BaseModel):
+    resume_url: Optional[str] = None
+    resume_text: Optional[str] = None
+    job_title: str
+    company: Optional[str] = "Target Company"
+    job_description: str
+
+
+@router.post("/tailor")
+async def tailor_resume(req: TailorRequest):
+    import json
+    
+    # 1. Obtain raw resume text
+    resume_text = req.resume_text
+    if not resume_text:
+        if not req.resume_url:
+            raise HTTPException(status_code=400, detail="Either resume_text or resume_url must be provided.")
+        try:
+            resume_text = await extract_text_from_url(req.resume_url)
+        except HTTPException as he:
+            raise he
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to extract resume text: {str(e)}")
+
+    # 2. Validate Bedrock availability
+    if not bedrock_extractor.is_available():
+        raise HTTPException(status_code=503, detail="AI tailoring service is currently unavailable.")
+
+    # 3. Create prompt
+    prompt = f"""You are an expert resume writer and career coach. Your task is to tailor a user's resume for a specific job description.
+Align the user's skills, accomplishments, and professional experience to highlight matching capabilities for the target role while maintaining truthfulness.
+
+Target Job Details:
+Title: {req.job_title}
+Company: {req.company}
+Job Description:
+{req.job_description}
+
+Original Resume Content:
+{resume_text}
+
+Provide the tailored resume output in clean JSON format matching the following schema. Keep descriptions concise, using strong action verbs:
+{{
+  "summary": "Tailored professional summary (max 3 sentences)",
+  "skills": ["Matched Skill 1", "Matched Skill 2", "Matched Skill 3", "Matched Skill 4"],
+  "employment": [
+    {{
+      "company": "Company Name",
+      "title": "Tailored Title (if applicable/truthful)",
+      "duration": "Duration",
+      "description": [
+         "Tailored bullet point 1 emphasizing matching responsibilities and metrics",
+         "Tailored bullet point 2 emphasizing matching responsibilities and metrics"
+      ]
+    }}
+  ],
+  "projects": [
+    {{
+      "title": "Project Title",
+      "description": [
+         "Tailored bullet point 1 highlighting tech stack and achievements relevant to the job",
+         "Tailored bullet point 2 highlighting tech stack and achievements relevant to the job"
+      ]
+    }}
+  ]
+}}
+
+Return ONLY the raw JSON object. No explanations, no markdown formatting (like ```json), no extra text."""
+
+    # 4. Invoke AWS Bedrock API
+    try:
+        url = f"https://bedrock-runtime.ap-south-1.amazonaws.com/model/{bedrock_extractor.model_id}/invoke"
+        headers = {
+            "Authorization": f"Bearer {bedrock_extractor.bedrock_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "messages": [{"role": "user", "content": [{"text": prompt}]}],
+            "inferenceConfig": {"maxTokens": 2048, "temperature": 0.3, "topP": 0.9}
+        }
+        
+        async with httpx.AsyncClient(timeout=120.0, verify=False) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            if response.status_code != 200:
+                raise HTTPException(status_code=500, detail=f"Bedrock service error: {response.text}")
+                
+            response_data = response.json()
+            output_text = ""
+            if "output" in response_data:
+                output_text = response_data["output"].get("message", {}).get("content", [{}])[0].get("text", "")
+            elif "content" in response_data:
+                output_text = response_data["content"][0].get("text", "")
+
+            # Clean markdown codeblocks
+            output_text = output_text.strip()
+            if output_text.startswith("```json"):
+                output_text = output_text[7:]
+            elif output_text.startswith("```"):
+                output_text = output_text[3:]
+            if output_text.endswith("```"):
+                output_text = output_text[:-3]
+            output_text = output_text.strip()
+
+            tailored_json = json.loads(output_text)
+            return {"status": "success", "tailored": tailored_json}
+            
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Failed to parse Bedrock response as JSON.")
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An error occurred during resume tailoring: {str(e)}")
