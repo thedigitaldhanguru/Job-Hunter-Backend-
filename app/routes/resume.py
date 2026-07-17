@@ -611,6 +611,14 @@ Original Resume Content:
 
 Provide the tailored resume output in clean JSON format matching the following schema. Keep descriptions concise, using strong action verbs:
 {{
+  "contact": {{
+    "email": "Email address from original resume, if found. Otherwise, leave empty.",
+    "phone": "Phone number from original resume, if found. Otherwise, leave empty.",
+    "location": "Location (city, country) from original resume, if found. Otherwise, leave empty.",
+    "github": "GitHub profile URL from original resume, if found. Otherwise, leave empty.",
+    "linkedin": "LinkedIn profile URL from original resume, if found. Otherwise, leave empty.",
+    "portfolio": "Portfolio or personal website URL from original resume, if found. Otherwise, leave empty."
+  }},
   "summary": "Tailored professional summary (max 3 sentences)",
   "skills": ["Matched Skill 1", "Matched Skill 2", "Matched Skill 3", "Matched Skill 4"],
   "employment": [
@@ -632,6 +640,21 @@ Provide the tailored resume output in clean JSON format matching the following s
          "Tailored bullet point 2 highlighting tech stack and achievements relevant to the job"
       ]
     }}
+  ],
+  "education": [
+    {{
+      "institution": "University/School Name from original resume",
+      "degree": "Degree name (e.g. B.Tech in Computer Science) from original resume",
+      "details": "Graduation year or GPA from original resume (e.g., 2020 - 2024)"
+    }}
+  ],
+  "accomplishments": [
+    "Certification, award, or honor 1 from original resume",
+    "Certification, award, or honor 2 from original resume"
+  ],
+  "languages": [
+    "Language 1",
+    "Language 2"
   ]
 }}
 
