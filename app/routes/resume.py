@@ -612,6 +612,7 @@ Original Resume Content:
 Provide the tailored resume output in clean JSON format matching the following schema. Keep descriptions concise, using strong action verbs:
 {{
   "contact": {{
+    "name": "Full name of the candidate from the top of the original resume, if found. Otherwise, leave empty.",
     "email": "Email address from original resume, if found. Otherwise, leave empty.",
     "phone": "Phone number from original resume, if found. Otherwise, leave empty.",
     "location": "Location (city, country) from original resume, if found. Otherwise, leave empty.",
