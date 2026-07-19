@@ -704,3 +704,32 @@ Return ONLY the raw JSON object. No explanations, no markdown formatting (like `
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred during resume tailoring: {str(e)}")
+
+
+from fastapi.responses import Response
+from io import BytesIO
+from xhtml2pdf import pisa
+
+class PDFGenerationRequest(BaseModel):
+    html: str
+
+@router.post("/generate-pdf")
+async def generate_pdf(req: PDFGenerationRequest):
+    try:
+        pdf_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(req.html, dest=pdf_buffer)
+        if pisa_status.err:
+            raise HTTPException(status_code=500, detail="Failed to render PDF using xhtml2pdf.")
+        
+        pdf_data = pdf_buffer.getvalue()
+        pdf_buffer.close()
+        
+        return Response(
+            content=pdf_data,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "attachment; filename=tailored_resume.pdf"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation error: {str(e)}")
