@@ -11,4 +11,3 @@ slowapi
 pypdf
 python-docx
 httpx
-xhtml2pdf
