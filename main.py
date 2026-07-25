@@ -5,7 +5,7 @@ from app.database import database
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from app.routes import jobs, profile, applications, apply, uploads, resume
+from app.routes import jobs, profile, applications, apply, uploads, resume, scrapers
 
 # Initialize Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -47,6 +47,7 @@ app.include_router(applications.router)
 app.include_router(apply.router)
 app.include_router(uploads.router)
 app.include_router(resume.router)
+app.include_router(scrapers.router)
 
 @app.get("/", tags=["System"])
 async def root_health():
