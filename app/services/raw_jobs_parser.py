@@ -10,11 +10,10 @@ logger = logging.getLogger(__name__)
 
 def format_job_description(raw_content: str) -> str:
     """
-    Beautifies and formats HTML or plain-text job descriptions into clean, beautifully structured text:
-    - Bold headers with icon markers (**📌 ABOUT STRIPE:**).
-    - Double newlines (\n\n) after headers to guarantee distinct line breaks on all web and mobile frontends.
-    - Formatted bullet points (• ) for list items.
-    - Stripped HTML tags and decoded entities.
+    Formats job descriptions with clean HTML bolding and line breaks for proper gaps:
+    - Removes all pin icons (📌, 📍) and raw markdown stars (**).
+    - Formats section headers in bold <b>TITLE:</b> with <br /><br /> line breaks for proper gaps.
+    - Bullet points formatted with <br />• list items.
     """
     if not raw_content:
         return ""
@@ -24,21 +23,21 @@ def format_job_description(raw_content: str) -> str:
     text = html.unescape(text)
     text = text.replace('\xa0', ' ').replace('&nbsp;', ' ')
     
-    # 2. Convert <li> tags into structured bullet points with newlines
-    text = re.sub(r'<li[^>]*>\s*', '\n• ', text, flags=re.IGNORECASE)
+    # 2. Strip any pin icons (📌, 📍) or markdown stars (**)
+    text = text.replace('📌', '').replace('📍', '').replace('**', '')
     
-    # 3. Format Headings <h1>-<h6> and <header> tag headers with clear section breaks & bolding
-    text = re.sub(r'<(h[1-6]|header)[^>]*>(.*?)</\1>', r'\n\n**📌 \2:**\n\n', text, flags=re.IGNORECASE | re.DOTALL)
+    # 3. Convert <li> tags into structured bullet points
+    text = re.sub(r'<li[^>]*>\s*', '<br />• ', text, flags=re.IGNORECASE)
     
-    # 4. Replace block-level tags (<p>, <div>, <br>, <ul>, <ol>) with double newlines
-    text = re.sub(r'</?(p|div|br|ul|ol)[^>]*>', '\n\n', text, flags=re.IGNORECASE)
+    # 4. Format <h1>-<h6> and <header> tags into bold HTML headers with proper gaps
+    text = re.sub(r'<(h[1-6]|header)[^>]*>(.*?)</\1>', r'<br /><br /><b>\2:</b><br /><br />', text, flags=re.IGNORECASE | re.DOTALL)
     
-    # 5. Strip all remaining HTML tags e.g. <span>, <a>, <strong>
-    text = re.sub(r'<[^>]+>', '', text)
+    # 5. Convert paragraph & div tags to double <br />
+    text = re.sub(r'</?(p|div)[^>]*>', '<br /><br />', text, flags=re.IGNORECASE)
+    text = re.sub(r'<br\s*/?>', '<br />', text, flags=re.IGNORECASE)
     
-    # 6. Process line-by-line: clean whitespace and reconstruct with proper bold header & line breaks
-    raw_lines = text.splitlines()
-    formatted_chunks = []
+    # 6. Strip all other HTML tags except <b>, <strong>, <br>
+    text = re.sub(r'<(?!/?(b|strong|br)\b)[^>]+>', '', text, flags=re.IGNORECASE)
     
     header_keywords = (
         "about the role", "about the company", "about the team", "about us",
@@ -46,37 +45,40 @@ def format_job_description(raw_content: str) -> str:
         "key responsibilities", "requirements", "qualifications", 
         "preferred qualifications", "minimum qualifications", 
         "who you are", "what we offer", "benefits", "what we look for",
-        "what you bring", "bonus points", "who we are", "about stripe",
-        "about anthropic", "about databricks", "about datadog"
+        "what you bring", "bonus points", "who we are", "must have skills",
+        "general summary", "essential duties & responsibilities", "essential duties",
+        "about stripe", "about anthropic", "about databricks", "about datadog"
     )
+    
+    raw_lines = text.splitlines()
+    formatted_chunks = []
     
     for line in raw_lines:
         line_str = re.sub(r'[ \t]+', ' ', line).strip()
         if not line_str:
             continue
             
-        # Strip any existing ### hashtags or bold stars if present
-        if line_str.startswith('###'):
-            line_str = line_str.lstrip('#').strip()
-        if line_str.startswith('**') and line_str.endswith('**'):
-            line_str = line_str.strip('*').strip()
-            
-        lower_line = line_str.lower().rstrip(':').strip()
+        clean_text_check = re.sub(r'<[^>]+>', '', line_str).strip()
+        clean_text_check = clean_text_check.replace('📌', '').replace('📍', '').replace('**', '').strip()
+        lower_check = clean_text_check.lower().rstrip(':').strip()
         
-        if lower_line in header_keywords or (line_str.endswith(':') and len(line_str) < 65 and not line_str.startswith('•')):
-            clean_title = line_str.rstrip(':').strip().upper()
+        if lower_check in header_keywords or (clean_text_check.endswith(':') and len(clean_text_check) < 65 and not clean_text_check.startswith('•')):
+            clean_title = clean_text_check.rstrip(':').strip().upper()
             if clean_title:
-                formatted_chunks.append(f"\n\n**📌 {clean_title}:**\n\n")
-        elif line_str.startswith('•') or line_str.startswith('-'):
-            clean_bullet = line_str.lstrip('-').strip()
+                formatted_chunks.append(f"<br /><br /><b>{clean_title}:</b><br /><br />")
+        elif clean_text_check.startswith('•') or clean_text_check.startswith('-'):
+            clean_bullet = clean_text_check.lstrip('-').strip()
             if not clean_bullet.startswith('•'):
                 clean_bullet = f"• {clean_bullet}"
-            formatted_chunks.append(f"\n{clean_bullet}")
+            formatted_chunks.append(f"<br />{clean_bullet}")
         else:
-            formatted_chunks.append(f"\n\n{line_str}")
+            clean_line = line_str.replace('<br />', '').strip()
+            if clean_line:
+                formatted_chunks.append(f"<br /><br />{clean_line}")
             
     result = ''.join(formatted_chunks).strip()
-    result = re.sub(r'\n{3,}', '\n\n', result)
+    result = re.sub(r'^(<br\s*/?>\s*)+', '', result, flags=re.IGNORECASE)
+    result = re.sub(r'(<br\s*/?>\s*){3,}', '<br /><br />', result, flags=re.IGNORECASE)
     return result
 
 def parse_salary_from_text(text: str) -> Dict[str, Any]:
