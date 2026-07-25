@@ -11,9 +11,8 @@ logger = logging.getLogger(__name__)
 def format_job_description(raw_content: str) -> str:
     """
     Beautifies and formats HTML or plain-text job descriptions into clean, beautifully structured text:
-    - Removes raw '###' hashtags for seamless rendering on mobile views.
-    - Highlights section headers prominently (e.g. 📌 ABOUT THE ROLE:).
-    - Proper double newlines between paragraphs & section headings.
+    - Bold headers with icon markers (**📌 ABOUT STRIPE:**).
+    - Double newlines (\n\n) after headers to guarantee distinct line breaks on all web and mobile frontends.
     - Formatted bullet points (• ) for list items.
     - Stripped HTML tags and decoded entities.
     """
@@ -28,8 +27,8 @@ def format_job_description(raw_content: str) -> str:
     # 2. Convert <li> tags into structured bullet points with newlines
     text = re.sub(r'<li[^>]*>\s*', '\n• ', text, flags=re.IGNORECASE)
     
-    # 3. Format Headings <h1>-<h6> and <strong> tag headers with clear section breaks
-    text = re.sub(r'<(h[1-6]|header)[^>]*>(.*?)</\1>', r'\n\n📌 \2:\n', text, flags=re.IGNORECASE | re.DOTALL)
+    # 3. Format Headings <h1>-<h6> and <header> tag headers with clear section breaks & bolding
+    text = re.sub(r'<(h[1-6]|header)[^>]*>(.*?)</\1>', r'\n\n**📌 \2:**\n\n', text, flags=re.IGNORECASE | re.DOTALL)
     
     # 4. Replace block-level tags (<p>, <div>, <br>, <ul>, <ol>) with double newlines
     text = re.sub(r'</?(p|div|br|ul|ol)[^>]*>', '\n\n', text, flags=re.IGNORECASE)
@@ -37,7 +36,7 @@ def format_job_description(raw_content: str) -> str:
     # 5. Strip all remaining HTML tags e.g. <span>, <a>, <strong>
     text = re.sub(r'<[^>]+>', '', text)
     
-    # 6. Process line-by-line: clean whitespace and reconstruct with proper paragraph & header breaks
+    # 6. Process line-by-line: clean whitespace and reconstruct with proper bold header & line breaks
     raw_lines = text.splitlines()
     formatted_chunks = []
     
@@ -56,16 +55,18 @@ def format_job_description(raw_content: str) -> str:
         if not line_str:
             continue
             
-        # Strip any existing ### hashtags if present in line
+        # Strip any existing ### hashtags or bold stars if present
         if line_str.startswith('###'):
             line_str = line_str.lstrip('#').strip()
+        if line_str.startswith('**') and line_str.endswith('**'):
+            line_str = line_str.strip('*').strip()
             
         lower_line = line_str.lower().rstrip(':').strip()
         
         if lower_line in header_keywords or (line_str.endswith(':') and len(line_str) < 65 and not line_str.startswith('•')):
             clean_title = line_str.rstrip(':').strip().upper()
             if clean_title:
-                formatted_chunks.append(f"\n\n📌 {clean_title}:\n")
+                formatted_chunks.append(f"\n\n**📌 {clean_title}:**\n\n")
         elif line_str.startswith('•') or line_str.startswith('-'):
             clean_bullet = line_str.lstrip('-').strip()
             if not clean_bullet.startswith('•'):
