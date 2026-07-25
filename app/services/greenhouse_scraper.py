@@ -21,7 +21,10 @@ class GreenhouseScraperService:
             "brex", "cloudflare", "roblox", "elastic", "pinterest", 
             "airbnb", "reddit", "gitlab", "instacart", "postman", "gusto",
             "10xgenomics", "stripe", "figma", "couchbaseinc", "celigo", 
-            "connectwise", "commvault", "commerceiq"
+            "connectwise", "commvault", "commerceiq", "fivetran", "affirm",
+            "coinbase", "flexport", "robinhood", "vercel", "mercury", "webflow",
+            "scaleai", "lyft", "klaviyo", "nuro", "chime", "twitch", "marqeta",
+            "cockroachlabs", "coursera"
         ]
 
     async def ensure_tables(self):
