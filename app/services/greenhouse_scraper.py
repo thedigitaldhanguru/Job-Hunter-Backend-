@@ -24,7 +24,8 @@ class GreenhouseScraperService:
             "connectwise", "commvault", "commerceiq", "fivetran", "affirm",
             "coinbase", "flexport", "robinhood", "vercel", "mercury", "webflow",
             "scaleai", "lyft", "klaviyo", "nuro", "chime", "twitch", "marqeta",
-            "cockroachlabs", "coursera"
+            "cockroachlabs", "coursera", "purestorage", "highradius", "phonepe",
+            "inmobi", "rubrik", "zenoti", "groww", "thoughtworks"
         ]
 
     async def ensure_tables(self):
